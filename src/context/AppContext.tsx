@@ -14,6 +14,7 @@ import {
     categoriesAPI,
     settingsAPI,
 } from "../lib/database";
+import { mockProducts } from "../data/products";
 interface AppContextType {
     user: User | null;
     isAuthenticated: boolean;
@@ -97,7 +98,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     };
     const refreshProducts = async () => {
         try {
-            const allProducts = await productsAPI.getAll();
+            let allProducts = await productsAPI.getAll();
+            // Auto-seed demo products if DB is empty
+            if (allProducts.length === 0) {
+                await Promise.all(mockProducts.map(p => productsAPI.add(p)));
+                allProducts = await productsAPI.getAll();
+            }
             setProducts(allProducts);
         } catch (error) {
             console.error("Ошибка загрузки продуктов:", error);
