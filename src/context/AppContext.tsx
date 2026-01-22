@@ -15,6 +15,7 @@ import {
     settingsAPI,
 } from "../lib/database";
 import { mockProducts } from "../data/products";
+import * as localStore from "../lib/store";
 interface AppContextType {
     user: User | null;
     isAuthenticated: boolean;
@@ -70,7 +71,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
             loadCart();
             loadFavorites();
         } else {
-            setCart([]);
+            loadGuestCart();
             setFavorites([]);
         }
     }, [user]);
@@ -116,6 +117,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
             console.error("Ошибка загрузки категорий:", error);
         }
     };
+    const loadGuestCart = () => {
+        try {
+            const guestCart = localStore.getCart();
+            setCart(guestCart);
+        } catch (error) {
+            console.error("Ошибка загрузки гостевой корзины:", error);
+        }
+    };
     const loadCart = async () => {
         if (!user) return;
         try {
@@ -151,6 +160,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         try {
             const loggedUser = await usersAPI.authenticate(email, password);
             if (loggedUser) {
+                const guestCart = localStore.getCart();
+                if (guestCart.length > 0) {
+                    for (const item of guestCart) {
+                        await cartAPI.add({
+                            productId: item.productId,
+                            quantity: item.quantity,
+                            userId: loggedUser.id,
+                            addedAt: new Date(),
+                        });
+                    }
+                    localStore.clearCart();
+                }
                 setUser(loggedUser);
                 localStorage.setItem("currentUser", JSON.stringify(loggedUser));
                 return loggedUser;
@@ -169,7 +190,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         try {
             const existingUser = await usersAPI.getByEmail(email);
             if (existingUser) {
-                // User already exists
                 return null;
             }
             const newUser: User = {
@@ -177,13 +197,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
                 email,
                 password,
                 name,
-                role: "user",
+                role: email.includes("admin") ? "admin" : "user",
                 level: 1,
                 points: 0,
                 ordersCount: 0,
                 createdAt: new Date(),
             };
             await usersAPI.add(newUser);
+            const guestCart = localStore.getCart();
+            if (guestCart.length > 0) {
+                for (const item of guestCart) {
+                    await cartAPI.add({
+                        productId: item.productId,
+                        quantity: item.quantity,
+                        userId: newUser.id,
+                        addedAt: new Date(),
+                    });
+                }
+                localStore.clearCart();
+            }
             setUser(newUser);
             localStorage.setItem("currentUser", JSON.stringify(newUser));
             return newUser;
@@ -206,29 +238,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         productId: string,
         quantity: number = 1,
     ): Promise<void> => {
-        if (!user) {
-            console.error("Необходимо войти в систему");
-            return;
-        }
         try {
-            await cartAPI.add({
-                productId,
-                quantity,
-                userId: user.id,
-                addedAt: new Date(),
-            });
-            await loadCart();
+            if (user) {
+                await cartAPI.add({
+                    productId,
+                    quantity,
+                    userId: user.id,
+                    addedAt: new Date(),
+                });
+                await loadCart();
+            } else {
+                const existingCart = localStore.getCart();
+                const existingItem = existingCart.find(item => item.productId === productId);
+                if (existingItem) {
+                    existingItem.quantity += quantity;
+                } else {
+                    existingCart.push({ productId, quantity });
+                }
+                localStore.saveCart(existingCart);
+                setCart(existingCart);
+            }
         } catch (error) {
             console.error("Ошибка добавления в корзину:", error);
         }
     };
     const handleRemoveFromCart = async (productId: string): Promise<void> => {
-        if (!user) return;
         try {
-            const item = cart.find((c) => c.productId === productId);
-            if (item && item.id) {
-                await cartAPI.remove(item.id);
-                await loadCart();
+            if (user) {
+                const item = cart.find((c) => c.productId === productId);
+                if (item && item.id) {
+                    await cartAPI.remove(item.id);
+                    await loadCart();
+                }
+            } else {
+                const updatedCart = cart.filter(item => item.productId !== productId);
+                localStore.saveCart(updatedCart);
+                setCart(updatedCart);
             }
         } catch (error) {
             console.error("Ошибка удаления из корзины:", error);
@@ -238,25 +283,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         productId: string,
         quantity: number,
     ): Promise<void> => {
-        if (!user) return;
         try {
-            const item = cart.find((c) => c.productId === productId);
-            if (item && item.id) {
-                if (quantity <= 0) {
-                    await cartAPI.remove(item.id);
-                } else {
-                    await cartAPI.updateQuantity(item.id, quantity);
+            if (user) {
+                const item = cart.find((c) => c.productId === productId);
+                if (item && item.id) {
+                    if (quantity <= 0) {
+                        await cartAPI.remove(item.id);
+                    } else {
+                        await cartAPI.updateQuantity(item.id, quantity);
+                    }
+                    await loadCart();
                 }
-                await loadCart();
+            } else {
+                if (quantity <= 0) {
+                    await handleRemoveFromCart(productId);
+                } else {
+                    const updatedCart = cart.map(item =>
+                        item.productId === productId
+                            ? { ...item, quantity }
+                            : item
+                    );
+                    localStore.saveCart(updatedCart);
+                    setCart(updatedCart);
+                }
             }
         } catch (error) {
             console.error("Ошибка обновления количества:", error);
         }
     };
     const handleClearCart = async (): Promise<void> => {
-        if (!user) return;
         try {
-            await cartAPI.clear(user.id);
+            if (user) {
+                await cartAPI.clear(user.id);
+            } else {
+                localStore.clearCart();
+            }
             setCart([]);
         } catch (error) {
             console.error("Ошибка очистки корзины:", error);

@@ -13,12 +13,13 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
-  const { login } = useApp();
+  const { login, register } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [isLogin, setIsLogin] = useState(true);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
@@ -26,12 +27,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
       return;
     }
 
-    const user = login(email, password);
-    if (user) {
-      toast.success(`Добро пожаловать, ${user.name}!`);
-      onNavigate('home');
-    } else {
-      toast.error('Ошибка авторизации');
+    if (!isLogin && !name) {
+      toast.error('Введите ваше имя');
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        const user = await login(email, password);
+        if (user) {
+          toast.success(`Добро пожаловать, ${user.name}!`);
+          onNavigate('home');
+        } else {
+          toast.error('Неверный email или пароль');
+        }
+      } else {
+        const user = await register(email, password, name);
+        if (user) {
+          toast.success(`Аккаунт создан! Добро пожаловать, ${user.name}!`);
+          onNavigate('home');
+        } else {
+          toast.error('Пользователь с таким email уже существует');
+        }
+      }
+    } catch (error) {
+      toast.error('Произошла ошибка. Попробуйте снова.');
     }
   };
 
@@ -71,6 +91,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                       id="name"
                       type="text"
                       placeholder="Ваше имя"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
                       className="pl-10"
                     />
                   </div>
@@ -131,9 +153,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
 
             <div className="mt-6 p-4 bg-muted rounded-lg">
               <p className="text-xs text-muted-foreground text-center">
-                <strong>Demo режим:</strong> Введите любой email и пароль для входа.
-                <br />
-                Для доступа к админ-панели используйте email с "admin" (например: admin@test.com)
+                {isLogin ? (
+                  <>
+                    <strong>Вход:</strong> Введите email и пароль зарегистрированного пользователя.
+                    <br />
+                    Для доступа к админ-панели используйте email с "admin" (например: admin@test.com)
+                  </>
+                ) : (
+                  <>
+                    <strong>Регистрация:</strong> Создайте новый аккаунт, указав имя, email и пароль.
+                    <br />
+                    Email с "admin" получит права администратора.
+                  </>
+                )}
               </p>
             </div>
           </CardContent>
