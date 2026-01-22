@@ -99,9 +99,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     const refreshProducts = async () => {
         try {
             let allProducts = await productsAPI.getAll();
-            // Auto-seed demo products if DB is empty
             if (allProducts.length === 0) {
-                await Promise.all(mockProducts.map(p => productsAPI.add(p)));
+                await Promise.all(mockProducts.map((p) => productsAPI.add(p)));
                 allProducts = await productsAPI.getAll();
             }
             setProducts(allProducts);
