@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-    base: "/e-commerce-table-games/",
+    base: "/e-commerce-table-games-site/",
     plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
