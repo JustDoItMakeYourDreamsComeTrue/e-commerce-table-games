@@ -249,7 +249,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
                 await loadCart();
             } else {
                 const existingCart = localStore.getCart();
-                const existingItem = existingCart.find(item => item.productId === productId);
+                const existingItem = existingCart.find(
+                    (item) => item.productId === productId,
+                );
                 if (existingItem) {
                     existingItem.quantity += quantity;
                 } else {
@@ -271,7 +273,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
                     await loadCart();
                 }
             } else {
-                const updatedCart = cart.filter(item => item.productId !== productId);
+                const updatedCart = cart.filter(
+                    (item) => item.productId !== productId,
+                );
                 localStore.saveCart(updatedCart);
                 setCart(updatedCart);
             }
@@ -298,10 +302,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
                 if (quantity <= 0) {
                     await handleRemoveFromCart(productId);
                 } else {
-                    const updatedCart = cart.map(item =>
+                    const updatedCart = cart.map((item) =>
                         item.productId === productId
                             ? { ...item, quantity }
-                            : item
+                            : item,
                     );
                     localStore.saveCart(updatedCart);
                     setCart(updatedCart);
